@@ -132,4 +132,24 @@ if __name__ == "__main__":
             df = yf.download(ticker, period="2y", interval=TIMEFRAME, progress=False)
             
             # Check if data is valid
-            if df.empty
+            if df.empty:
+                print(f"Skipping {ticker}: No data found.")
+                continue
+                
+            # Run Bot Logic
+            bot = ICT_Blueprint_Bot(df)
+            bot.calculate_indicators() 
+            signal = bot.check_latest_signal(ticker)
+            
+            # Send Alert if Signal Found
+            if signal:
+                print(f"✅ SIGNAL FOUND for {ticker}")
+                send_discord_alert(signal)
+            else:
+                print(f"No signal for {ticker}")
+                
+            # Sleep 1 sec to be polite to the API
+            time.sleep(1)
+            
+        except Exception as e:
+            print(f"⚠️ Error analyzing {ticker}: {e}")
