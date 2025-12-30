@@ -1,10 +1,10 @@
-name: Run Trading Bot
+name: Run ICT Bot
 
 on:
   schedule:
-    # Runs at 08:00 UTC every day (Adjust as needed)
-    - cron: '0 8 * * *'
-  workflow_dispatch: # Allows you to run it manually to test
+    # Runs at 01:00 UTC every day (1 hour after crypto daily close)
+    - cron: '0 1 * * *'
+  workflow_dispatch: # Allows manual button click testing
 
 jobs:
   run-bot:
@@ -21,7 +21,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
+        pip install pandas yfinance requests
 
     - name: Run Bot Script
       env:
