@@ -20,12 +20,11 @@ class ICT_Blueprint_Bot:
         self.market_structure = "NEUTRAL"
         self.current_range = None
         self.order_block = None
-        self.fvg_zone = None  # New: Store FVG data
+        self.fvg_zone = None 
 
     def calculate_indicators(self):
         if len(self.df) < 50: return 
         
-        # Calculate 50 SMA for Trend Filtering
         self.df['SMA_50'] = self.df['Close'].rolling(window=50).mean()
 
         for i in range(2, len(self.df)):
@@ -42,11 +41,9 @@ class ICT_Blueprint_Bot:
             l_left = float(self.df['Low'].iloc[i-1])
             l_left2 = float(self.df['Low'].iloc[i-2])
 
-            # Swing High
             if h_left > h_left2 and h_left > h_i:
                 self.swing_highs.append((i-1, h_left))
             
-            # Swing Low
             if l_left < l_left2 and l_left < l_i:
                 self.swing_lows.append((i-1, l_left))
         except Exception:
@@ -61,13 +58,11 @@ class ICT_Blueprint_Bot:
         last_high_idx, last_high_price = self.swing_highs[-1]
         last_low_idx, last_low_price = self.swing_lows[-1]
 
-        # BULLISH MSB: Break High + Price > 50 SMA (Trend Filter)
         if current_close > last_high_price and current_close > current_sma:
             if self.market_structure != "BULLISH":
                 self.market_structure = "BULLISH"
                 self.define_range("BULLISH")
         
-        # BEARISH MSB: Break Low + Price < 50 SMA (Trend Filter)
         elif current_close < last_low_price or current_close < current_sma:
             if self.market_structure != "BEARISH":
                 self.market_structure = "BEARISH"
@@ -81,8 +76,6 @@ class ICT_Blueprint_Bot:
             mid = (current_high + recent_low) / 2
             
             self.current_range = {'discount': (recent_low, mid), 'dir': 'BULLISH'}
-            
-            # Find POIs (Order Block AND FVG)
             self.find_order_block(recent_low_idx, "BULLISH")
             self.find_fvg(recent_low_idx, "BULLISH")
 
@@ -93,13 +86,10 @@ class ICT_Blueprint_Bot:
             mid = (recent_high + current_low) / 2
             
             self.current_range = {'premium': (mid, recent_high), 'dir': 'BEARISH'}
-            
-            # Find POIs
             self.find_order_block(recent_high_idx, "BEARISH")
             self.find_fvg(recent_high_idx, "BEARISH")
 
     def find_order_block(self, pivot_index, direction):
-        # ... (Same Order Block Logic as before) ...
         found_ob = False
         search_limit = 5 
         for k in range(search_limit):
@@ -120,33 +110,23 @@ class ICT_Blueprint_Bot:
             self.order_block = {'top': float(self.df['High'].iloc[pivot_index]), 'bottom': float(self.df['Low'].iloc[pivot_index])}
 
     def find_fvg(self, pivot_index, direction):
-        """
-        Scans for the biggest FVG (Fair Value Gap) near the swing point.
-        """
-        self.fvg_zone = None # Reset
-        
-        # Look forward from the pivot to find the displacement candles
-        # We check the next 5 candles after the swing started
+        self.fvg_zone = None 
         start_search = pivot_index
         end_search = min(len(self.df)-1, pivot_index + 5)
         
         for i in range(start_search, end_search):
             try:
-                # BULLISH FVG: High of candle 1 < Low of candle 3
                 if direction == "BULLISH":
                     candle_1_high = float(self.df['High'].iloc[i])
                     candle_3_low = float(self.df['Low'].iloc[i+2])
-                    
-                    if candle_3_low > candle_1_high: # GAP FOUND
+                    if candle_3_low > candle_1_high: 
                         self.fvg_zone = {'top': candle_3_low, 'bottom': candle_1_high, 'type': 'Bullish FVG'}
-                        return # Stop after finding the first/closest one
+                        return 
 
-                # BEARISH FVG: Low of candle 1 > High of candle 3
                 elif direction == "BEARISH":
                     candle_1_low = float(self.df['Low'].iloc[i])
                     candle_3_high = float(self.df['High'].iloc[i+2])
-                    
-                    if candle_1_low > candle_3_high: # GAP FOUND
+                    if candle_1_low > candle_3_high: 
                         self.fvg_zone = {'top': candle_1_low, 'bottom': candle_3_high, 'type': 'Bearish FVG'}
                         return 
             except:
@@ -155,34 +135,23 @@ class ICT_Blueprint_Bot:
     def check_latest_signal(self, symbol_name):
         if not self.current_range: return None
 
-        # Live Price (Last Candle Close)
         last_price = float(self.df['Close'].iloc[-1])
         last_low = float(self.df['Low'].iloc[-1])
         last_high = float(self.df['High'].iloc[-1])
         
         msg = None
         
-        # --- BULLISH SCENARIO ---
         if self.current_range['dir'] == "BULLISH":
-            if last_low < self.current_range['discount'][1]: # Inside Discount
-                
-                # Check 1: Order Block Tap
+            if last_low < self.current_range['discount'][1]:
                 if self.order_block and (self.order_block['bottom'] <= last_low <= self.order_block['top']):
                      msg = f"🚀 **BUY ALERT: {symbol_name}**\n**Setup:** Bullish Order Block + Discount\n**Price:** {last_price}\n**Ref:** Simple $10M Blueprint"
-                
-                # Check 2: FVG Tap (If OB wasn't hit, check FVG)
                 elif self.fvg_zone and (self.fvg_zone['bottom'] <= last_low <= self.fvg_zone['top']):
                      msg = f"🚀 **BUY ALERT: {symbol_name}**\n**Setup:** Bullish FVG (Gap Fill) + Discount\n**Price:** {last_price}\n**Ref:** Simple $10M Blueprint"
 
-        # --- BEARISH SCENARIO ---
         elif self.current_range['dir'] == "BEARISH":
-            if last_high > self.current_range['premium'][0]: # Inside Premium
-                
-                # Check 1: Order Block Tap
+            if last_high > self.current_range['premium'][0]:
                 if self.order_block and (self.order_block['bottom'] <= last_high <= self.order_block['top']):
                     msg = f"📉 **SELL ALERT: {symbol_name}**\n**Setup:** Bearish Order Block + Premium\n**Price:** {last_price}\n**Ref:** Simple $10M Blueprint"
-
-                # Check 2: FVG Tap
                 elif self.fvg_zone and (self.fvg_zone['bottom'] <= last_high <= self.fvg_zone['top']):
                     msg = f"📉 **SELL ALERT: {symbol_name}**\n**Setup:** Bearish FVG (Gap Fill) + Premium\n**Price:** {last_price}\n**Ref:** Simple $10M Blueprint"
         
@@ -197,24 +166,29 @@ def send_discord_alert(message):
 if __name__ == "__main__":
     print(f"Scanning {len(SYMBOLS)} assets...")
     for ticker in SYMBOLS:
+        print(f"Checking {ticker}...", end=" ") # Visual feedback
         try:
-            # Download Data
             df = yf.download(ticker, period="1y", interval=TIMEFRAME, progress=False)
             
-            # FLATTEN MULTI-INDEX (Fix for Ambiguous Error)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
-            if df.empty: continue
+            if df.empty:
+                print("❌ FAILED (No Data)")
+                continue
+            else:
+                print(f"✅ Data OK ({len(df)} candles)", end=" - ")
                 
             bot = ICT_Blueprint_Bot(df)
             bot.calculate_indicators() 
             signal = bot.check_latest_signal(ticker)
             
             if signal:
-                print(f"Signal for {ticker}")
+                print(f"SIGNAL FOUND! 🔔")
                 send_discord_alert(signal)
+            else:
+                print("No Signal.")
             
             time.sleep(1)
         except Exception as e:
-            print(f"Error {ticker}: {e}")
+            print(f"❌ Error: {e}")
